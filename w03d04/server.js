@@ -1,6 +1,8 @@
 const express = require('express');
 const morgan = require('morgan');
-const cookieParser = require('cookie-parser');
+// const cookieParser = require('cookie-parser');
+const bcrypt = require('bcryptjs');
+const cookieSession = require('cookie-session');
 
 const app = express();
 const port = process.env.PORT || 54321;
@@ -8,7 +10,11 @@ const port = process.env.PORT || 54321;
 // middleware
 app.use(express.urlencoded({ extended: false }));
 app.use(morgan('dev'));
-app.use(cookieParser());
+// app.use(cookieParser());
+app.use(cookieSession({
+  name: 'potato',
+  keys: ['my', 'secret', 'keys']
+}));
 
 app.set('view engine', 'ejs');
 
@@ -33,18 +39,21 @@ const users = {
   abcd: {
     id: 'abcd',
     email: 'alice@gmail.com',
-    password: '1234'
+    password: '$2a$10$Dv7Eoqc9O4UT7kDgCkjeYeVj5uJ2GkN2kFPLHfhf6bZg.AJQVKewe'
   },
   defg: {
     id: 'defg',
     email: 'jstamos@gmail.com',
-    password: '5678'
+    password: '$2a$10$Dv7Eoqc9O4UT7kDgCkjeYeVj5uJ2GkN2kFPLHfhf6bZg.AJQVKewe'
   }
 };
 
 // routes
 app.get('/', (req, res) => {
-  const user = users[req.cookies.userId];
+  // const userId = req.cookies.userId;
+  const userId = req.session.userId;
+
+  const user = users[userId];
   
   const templateVars = {
     user: user
@@ -71,11 +80,15 @@ app.post('/login', (req, res) => {
     return res.send('Error: User does not exist');
   }
 
-  if (user.password !== password) {
+  const result = bcrypt.compareSync(password, user.password);
+
+  if (!result) {
     return res.send('Error: Passwords do not match');
   }
 
-  res.cookie('userId', user.id);
+  // res.cookie('userId', user.id);
+  req.session.userId = user.id;
+
   res.redirect('/');
 });
 
@@ -90,20 +103,28 @@ app.post('/register', (req, res) => {
     return res.send('Error: A user with that email already exists');
   }
 
+  const salt = bcrypt.genSaltSync();
+  const hashedPassword = bcrypt.hashSync(password, salt);
+
   const newUser = {
     id: id,
     email: email,
-    password: password
+    password: hashedPassword
   };
 
   users[id] = newUser;
+  console.log(users);
 
-  res.cookie('userId', newUser.id);
+  // res.cookie('userId', newUser.id);
+  req.session.userId = newUser.id;
+
   res.redirect('/');
 });
 
 app.post('/logout', (req, res) => {
-  res.clearCookie('userId');
+  // res.clearCookie('userId');
+  req.session = null;
+
   res.redirect('/');
 });
 
